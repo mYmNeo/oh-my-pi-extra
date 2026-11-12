@@ -1,0 +1,30 @@
+{
+	"name": "autoload-skills",
+	"version": "0.1.0",
+	"private": true,
+	"description": "omp extension that autoloads skills listed in the agent-directory config into prompt context",
+	"keywords": ["omp-extension", "skills"],
+	"license": "MIT",
+	"type": "module",
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"check": "bun run typecheck && bun test"
+	},
+	"devDependencies": {
+		"@oh-my-pi/pi-coding-agent": "18.14.0",
+		"@types/bun": "1.4.2",
+		"@types/node": "24.12.4",
+		"typescript": "5.9.3"
+	},
+	"peerDependencies": {
+		"@oh-my-pi/pi-coding-agent": "*"
+	},
+	"engines": {
+		"bun": ">=1.4.4",
+		"node": ">=22.19.0"
+	},
+	"omp": {
+		"extensions": ["./src/index.ts"]
+	}
+}
