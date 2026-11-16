@@ -3,6 +3,7 @@ import {
 	buildSkillPromptMessage,
 	getAgentDir,
 	getActiveSkills,
+	isUserAuthoredMessage,
 	SKILL_PROMPT_MESSAGE_TYPE,
 	type BeforeAgentStartEventResult,
 	type CustomMessagePayload,
@@ -69,6 +70,51 @@ export function inContextSkillNames(messages: readonly unknown[]): InContextSkil
 		}
 	}
 	return { host, own };
+}
+
+/** Structural view of request messages; only the fields the reorder needs. */
+interface RequestMessageLike {
+	role?: string;
+	customType?: string;
+}
+
+/**
+ * A user-authored turn boundary, using the host's own definition so `/skill:`
+ * invocations and user-attributed collab prompts count too. Request messages
+ * are AgentMessages at runtime; the structural view lets tests pass plain
+ * objects with only the fields the reorder reads.
+ */
+function isPromptMessage(message: RequestMessageLike): boolean {
+	return isUserAuthoredMessage(message as Parameters<typeof isUserAuthoredMessage>[0]);
+}
+
+/**
+ * Move each autoload-skills message in front of the user prompt it accompanies.
+ *
+ * The host appends `before_agent_start` messages after the prompt, so the model
+ * would read the skill bodies after the request. Applying this to the request
+ * context puts them first without changing the session transcript. Returns
+ * `undefined` when no message needs moving.
+ */
+export function reorderAutoloadSkillsMessages<M extends RequestMessageLike>(
+	messages: readonly M[],
+): M[] | undefined {
+	let changed = false;
+	const output: M[] = [];
+	for (const message of messages) {
+		if (message.role !== "custom" || message.customType !== AUTOLOAD_SKILLS_MESSAGE_TYPE) {
+			output.push(message);
+			continue;
+		}
+		const promptIndex = output.findLastIndex(isPromptMessage);
+		if (promptIndex < 0) {
+			output.push(message);
+			continue;
+		}
+		output.splice(promptIndex, 0, message);
+		changed = true;
+	}
+	return changed ? output : undefined;
 }
 
 export function resolveAutoloadSkills(
@@ -203,6 +249,10 @@ export interface AutoloadSkillsExtensionOptions {
  * keeps `/reset`, compaction, and branch switches correct without caching.
  * The message is displayed as a one-line transcript note naming the skills;
  * the bodies stay out of the transcript.
+ *
+ * The host appends that message after the user prompt, so the `context` hook
+ * moves it in front of the prompt for the request while the transcript keeps
+ * the host's order.
  */
 export function createAutoloadSkillsExtension(options: AutoloadSkillsExtensionOptions = {}): (pi: ExtensionAPI) => void {
 	const loadConfig = options.loadConfig ?? loadAutoloadConfig;
@@ -228,6 +278,12 @@ export function createAutoloadSkillsExtension(options: AutoloadSkillsExtensionOp
 				ctx.ui.notify(reason, "error");
 			}
 		};
+
+		pi.on("context", (event) => {
+			if (specs.length === 0) return undefined;
+			const messages = reorderAutoloadSkillsMessages(event.messages);
+			return messages ? { messages } : undefined;
+		});
 
 		// `/new`, fork, and resume emit `session_switch`, not `session_start`.
 		pi.on("session_start", (_event, ctx) => reloadConfig(ctx));

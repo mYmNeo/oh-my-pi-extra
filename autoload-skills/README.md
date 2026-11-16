@@ -4,6 +4,8 @@ omp extension that reads `autoload-skills.json` from the default agent directory
 
 Injection happens in `before_agent_start`: the extension returns one hidden custom message carrying all pending skill bodies, which the host pushes into the current turn. Injection is context-aware — a skill is injected only when its body is not already in the model context, so it re-appears after `/reset`, compaction, or a branch switch (the body left context there), and is not duplicated on later turns of the same context.
 
+The host appends `before_agent_start` messages after the user prompt, so the extension's `context` hook moves the combined message in front of the prompt in the request sent to the model. The session transcript keeps the host's order; only the model request is reordered, and it stays byte-identical otherwise.
+
 Skill bodies use the same provenance-only format as subagent `autoloadSkills`: bodies are in the conversation, not claimed as a user `/skill:` invocation. Autoloaded skills are also stripped from the system-prompt `skill://<name>` catalog (the model already has the body), including the SYSTEM.md `<skill name="…">` listing — but only while their bodies are actually in context. Main session only: subagents never inject.
 
 ## Config

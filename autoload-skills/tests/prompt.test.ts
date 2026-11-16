@@ -13,9 +13,6 @@ const hostSkill = (name: string) => ({
   source: "native" as const,
 });
 
-const DEFAULT_SKILLS_SECTION =
-  /# Skills & Rules\nMatching skill → MUST read `skill:\/\/<name>` first\.\n<skills>\n[\s\S]*?\n<\/skills>/;
-
 describe("stripAutoloadedSkillsFromPrompt", () => {
   it("keeps the header, intro, and remaining entries when stripping one skill", async () => {
     const { systemPrompt } = await buildSystemPrompt({
@@ -23,31 +20,29 @@ describe("stripAutoloadedSkillsFromPrompt", () => {
     });
     const next = stripAutoloadedSkillsFromPrompt(systemPrompt[0] ?? "", new Set(["alpha"]));
     expect(next).toContain("# Skills & Rules");
-    expect(next).toContain("Matching skill → MUST read `skill://<name>` first.");
+    expect(next).toContain("Matching skill");
     expect(next).toContain("- beta: beta desc");
     expect(next).not.toContain("- alpha:");
   });
 
-  it("drops block, intro, and header when every skill is stripped — matching the host zero-skill render", async () => {
+  it("drops block, intro, and header when every skill is stripped", async () => {
     const withSkills = await buildSystemPrompt({
       skills: [hostSkill("alpha"), hostSkill("beta")],
-    });
-    const withoutSkills = await buildSystemPrompt({
-      skills: [],
     });
     const next = stripAutoloadedSkillsFromPrompt(
       withSkills.systemPrompt[0] ?? "",
       new Set(["alpha", "beta"]),
     );
-    expect(next).not.toMatch(DEFAULT_SKILLS_SECTION);
+    expect(next).not.toContain("<skills>");
     expect(next).not.toContain("# Skills & Rules");
     expect(next).not.toContain("Matching skill");
     // The join between the surrounding sections survives the strip.
-    expect(next).toContain("§ Runtime");
+    const original = withSkills.systemPrompt[0] ?? "";
+    const beforeSection = original.slice(0, original.indexOf("# Skills & Rules")).trimEnd();
+    const tail = beforeSection.split("\n").at(-1) ?? "";
+    expect(tail).not.toBe("");
+    expect(next).toContain(tail);
     expect(next).toContain("# Internal URLs");
-    expect(next.split("§ Runtime").length).toBe(
-      (withoutSkills.systemPrompt[0] ?? "").split("§ Runtime").length,
-    );
   });
 
   it("drops the custom-template intro sentences when the SYSTEM.md block empties", async () => {

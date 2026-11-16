@@ -38,6 +38,7 @@ function filterSkillsBody(body: string, names: ReadonlySet<string>): { lines: st
 
 /** Host intro sentences rendered directly above a `<skills>` block (default and SYSTEM.md templates). */
 const INTRO_LINES: Record<string, true> = {
+	"Matching skill → MUST read skill://<name> first.": true,
 	"Matching skill → MUST read `skill://<name>` first.": true,
 	"Skills are specialized knowledge. Scan descriptions for your task domain.": true,
 	"If a skill applies, you MUST read `skill://<name>` before proceeding.": true,

@@ -17,6 +17,7 @@ import {
   autoloadSkillsNotifyText,
   createAutoloadSkillsExtension,
   inContextSkillNames,
+  reorderAutoloadSkillsMessages,
   resolveAutoloadSkills,
 } from "../src/autoload-skills/autoload.ts";
 import { fakeCtx, fakePi, type FakePi } from "./helpers.ts";
@@ -151,6 +152,65 @@ describe("inContextSkillNames", () => {
   });
 });
 
+describe("reorderAutoloadSkillsMessages", () => {
+  const autoload = { role: "custom", customType: AUTOLOAD_SKILLS_MESSAGE_TYPE, content: "bodies" };
+  const user = { role: "user", content: "hi" };
+  const assistant = { role: "assistant", content: [] };
+
+  it("moves the injection ahead of the prompt it followed", () => {
+    expect(reorderAutoloadSkillsMessages([user, autoload, assistant])).toEqual([
+      autoload,
+      user,
+      assistant,
+    ]);
+  });
+
+  it("moves ahead of the prompt across intervening turn context", () => {
+    const mention = { role: "custom", customType: "file-mention", content: "f" };
+    expect(reorderAutoloadSkillsMessages([user, mention, autoload])).toEqual([
+      autoload,
+      user,
+      mention,
+    ]);
+  });
+
+  it("leaves the order alone without an autoload message", () => {
+    expect(reorderAutoloadSkillsMessages([user, assistant])).toBeUndefined();
+  });
+
+  it("leaves a leading injection in place", () => {
+    expect(reorderAutoloadSkillsMessages([autoload, user])).toBeUndefined();
+  });
+
+  it("moves ahead of a user-invoked skill prompt", () => {
+    const skillPrompt = {
+      role: "custom",
+      customType: SKILL_PROMPT_MESSAGE_TYPE,
+      attribution: "user",
+      content: "task",
+    };
+    expect(reorderAutoloadSkillsMessages([skillPrompt, autoload])).toEqual([
+      autoload,
+      skillPrompt,
+    ]);
+  });
+
+  it("anchors on the current skill prompt, not an older user turn", () => {
+    const earlierUser = { role: "user", content: "earlier" };
+    const skillPrompt = {
+      role: "custom",
+      customType: SKILL_PROMPT_MESSAGE_TYPE,
+      attribution: "user",
+      content: "task",
+    };
+    expect(reorderAutoloadSkillsMessages([earlierUser, skillPrompt, autoload])).toEqual([
+      earlierUser,
+      autoload,
+      skillPrompt,
+    ]);
+  });
+});
+
 describe("createAutoloadSkillsExtension", () => {
   const configWith = (names: string[]) => ({
     path: "/agent/autoload-skills.json",
@@ -211,6 +271,43 @@ describe("createAutoloadSkillsExtension", () => {
     const rendered = note?.render(80).join("\n") ?? "";
     expect(rendered).toContain(autoloadSkillsNotifyText(["fresh"]));
     expect(rendered).not.toContain("TOKEN_FRESH_BODY");
+  });
+
+  it("reorders the injection ahead of the user prompt in the request context", async () => {
+    const { extension, ctx } = await startedExtension(["fresh"]);
+    const user = { role: "user", content: "hi" };
+    const autoload = {
+      role: "custom",
+      customType: AUTOLOAD_SKILLS_MESSAGE_TYPE,
+      content: "bodies",
+    };
+    const result = await extension.emit(
+      "context",
+      { type: "context", messages: [user, autoload] },
+      ctx,
+    );
+    expect(result).toEqual({ messages: [autoload, user] });
+  });
+
+  it("leaves the request context untouched when no autoload message is present", async () => {
+    const { extension, ctx } = await startedExtension(["fresh"]);
+    const user = { role: "user", content: "hi" };
+    expect(
+      await extension.emit("context", { type: "context", messages: [user] }, ctx),
+    ).toBeUndefined();
+  });
+
+  it("leaves the request context untouched when no skills are configured", async () => {
+    const { extension, ctx } = await startedExtension([]);
+    const user = { role: "user", content: "hi" };
+    const autoload = {
+      role: "custom",
+      customType: AUTOLOAD_SKILLS_MESSAGE_TYPE,
+      content: "bodies",
+    };
+    expect(
+      await extension.emit("context", { type: "context", messages: [user, autoload] }, ctx),
+    ).toBeUndefined();
   });
 
   it("dedupes against skill bodies already in the model context and still strips the catalog", async () => {
