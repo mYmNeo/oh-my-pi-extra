@@ -12,6 +12,7 @@ import {
   type SessionMessageEntry,
   type Skill,
 } from "@oh-my-pi/pi-coding-agent";
+import { UiNode } from "@oh-my-pi/pi-tui";
 import {
   AUTOLOAD_SKILLS_MESSAGE_TYPE,
   autoloadSkillsNotifyText,
@@ -268,8 +269,10 @@ describe("createAutoloadSkillsExtension", () => {
       { expanded: false },
       plainTheme,
     );
-    const rendered = note?.render(80).join("\n") ?? "";
-    expect(rendered).toContain(autoloadSkillsNotifyText(["fresh"]));
+    if (!(note instanceof UiNode)) throw new Error("expected a pi-tui node");
+    expect(note.kind).toBe("text");
+    expect(note.props()).toMatchObject({ spans: [{ t: autoloadSkillsNotifyText(["fresh"]), s: "muted" }] });
+    const rendered = JSON.stringify(note.props());
     expect(rendered).not.toContain("TOKEN_FRESH_BODY");
   });
 

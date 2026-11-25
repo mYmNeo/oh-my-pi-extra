@@ -10,8 +10,8 @@ import {
 	type ExtensionAPI,
 	type ExtensionContext,
 	type Skill,
-	Text,
 } from "@oh-my-pi/pi-coding-agent";
+import { jsx } from "@oh-my-pi/pi-tui";
 import { loadAutoloadConfig, type AutoloadConfig, type AutoloadSkillSpec } from "./config.ts";
 import { stripAutoloadedSkillsFromSystemPrompt } from "./prompt.ts";
 
@@ -258,9 +258,9 @@ export function createAutoloadSkillsExtension(options: AutoloadSkillsExtensionOp
 	const loadConfig = options.loadConfig ?? loadAutoloadConfig;
 	const agentDir = options.agentDir ?? getAgentDir();
 	return (pi) => {
-		pi.registerMessageRenderer<AutoloadSkillsDetails>(AUTOLOAD_SKILLS_MESSAGE_TYPE, (message, _options, theme) => {
+		pi.registerMessageRenderer<AutoloadSkillsDetails>(AUTOLOAD_SKILLS_MESSAGE_TYPE, (message) => {
 			const names = message.details?.skills.map((skill) => skill.name) ?? [];
-			return new Text(theme.fg("muted", autoloadSkillsNotifyText(names)), 1, 0);
+			return jsx("text", { spans: [{ t: autoloadSkillsNotifyText(names), s: "muted" }] });
 		});
 		let specs: readonly AutoloadSkillSpec[] = [];
 		/** Missing names already warned about, per session id. */
